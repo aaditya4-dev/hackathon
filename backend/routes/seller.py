@@ -2,6 +2,8 @@ from fastapi import APIRouter
 from services.analysis import load_data, predictor_model, predictor_features
 from model.predictor import predict_demand
 import pandas as pd
+from database.db import conn
+from collections import Counter
 
 router = APIRouter()
 
@@ -79,4 +81,22 @@ def predict_demand_endpoint():
     return {
         "predicted_trending_books":
         predictions[['title','demand_score']].to_dict(orient="records")
+    }
+@router.get("/seller/user-insights")
+def user_insights():
+
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT book FROM user_reads")
+
+    rows = cursor.fetchall()
+
+    books = [row[0] for row in rows]
+
+    counts = Counter(books)
+
+    top_books = counts.most_common(5)
+
+    return {
+        "books_users_are_reading": top_books
     }
