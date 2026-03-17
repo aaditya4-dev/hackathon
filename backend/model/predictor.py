@@ -16,6 +16,7 @@ def train_predictor(df):
     model_df = model_df.explode('genres')
     model_df['genres'] = model_df['genres'].str.strip()
 
+
     # bestseller threshold
     threshold = model_df['numRatings'].quantile(0.80)
 
@@ -54,3 +55,32 @@ def train_predictor(df):
     model.fit(X, y)
 
     return model, X.columns, listofgenre, threshold, bestseller_stats
+
+def predict_demand(model, features, df, top_n=10):
+
+    model_df = df[['genres','pages','price','numRatings','numofchar']].copy()
+    model_df = model_df.dropna()
+
+    model_df['genres'] = model_df['genres'].str.replace('[', '', regex=False)\
+                                           .str.replace(']', '', regex=False)\
+                                           .str.replace("'", '', regex=False)
+
+    model_df['genres'] = model_df['genres'].str.split(',')
+    model_df = model_df.explode('genres')
+    model_df['genres'] = model_df['genres'].str.strip()
+
+    model_df = pd.get_dummies(model_df[['pages','price','numofchar','genres']], dtype=int)
+
+    model_df = model_df.reindex(columns=features, fill_value=0)
+
+    probs = model.predict_proba(model_df)[:,1]
+
+    model_df["demand_score"] = probs
+
+    # merge exploded rows back to books
+    scores = model_df.groupby(model_df.index)["demand_score"].mean()
+
+    df_copy = df.copy()
+    df_copy["demand_score"] = scores
+
+    return df_copy.sort_values("demand_score", ascending=False).head(top_n)

@@ -1,6 +1,6 @@
 import pandas as pd
 from recommender import train_recommender
-from predictor import train_predictor
+from backend.model.predictor import train_predictor
 
 # load data
 df = pd.read_csv("data/final_merge.csv")
