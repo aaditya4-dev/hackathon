@@ -1,34 +1,74 @@
 from fastapi import APIRouter
 from services.analysis import load_data, predictor_model, predictor_features
 from model.predictor import predict_demand
+import pandas as pd
 
 router = APIRouter()
 
+
+# TRENDING BOOKS
 @router.get("/seller/trending")
 def trending_books():
+  
+   df = load_data()
 
-    trending = [
-        "Atomic Habits",
-        "Rich Dad Poor Dad",
-        "The Alchemist",
-        "Deep Work"
-    ]
+   df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
+   df['numRatings'] = pd.to_numeric(df['numRatings'], errors='coerce').fillna(0)
+   df['likedPercent'] = pd.to_numeric(df['likedPercent'], errors='coerce').fillna(0)
 
-    return {
-        "trending_books": trending
+# normalize
+   df["rating_norm"] = df["rating"] / df["rating"].max()
+   df["ratings_norm"] = df["numRatings"] / df["numRatings"].max()
+   df["likes_norm"] = df["likedPercent"] / df["likedPercent"].max()
+
+# trend score
+   df["trend_score"] = (
+      df["rating_norm"] * 0.4 +
+      df["ratings_norm"] * 0.4 +
+      df["likes_norm"] * 0.2
+    )
+
+   trending = df.sort_values("trend_score", ascending=False).head(10)
+   return {
+        "trending_books": trending[['title','trend_score']].to_dict(orient="records")
     }
+
+
+# SELLER ANALYTICS
 @router.get("/seller/analytics")
 def seller_analytics():
 
-    analytics = {
-        "top_genres": ["Self Help", "Finance", "Fiction"],
-        "top_books": ["Atomic Habits", "Deep Work"],
-        "low_demand_books": ["Old Classics"]
+    df = load_data()
+
+    total_books = len(df)
+
+    avg_rating = df["rating"].mean()
+
+    top_genres = (
+        df["genres"]
+        .str.split(",")
+        .explode()
+        .value_counts()
+        .head(3)
+        .index
+        .tolist()
+    )
+
+    top_books = (
+        df.sort_values("numRatings", ascending=False)
+        .head(5)["title"]
+        .tolist()
+    )
+
+    return {
+        "total_books": total_books,
+        "average_rating": round(avg_rating,2),
+        "top_genres": top_genres,
+        "top_books": top_books
     }
 
-    return analytics 
 
-
+# DEMAND PREDICTION (AI MODEL)
 @router.get("/seller/predict-demand")
 def predict_demand_endpoint():
 
@@ -37,5 +77,6 @@ def predict_demand_endpoint():
     predictions = predict_demand(predictor_model, predictor_features, df)
 
     return {
-        "predicted_trending_books": predictions[['title','demand_score']].to_dict(orient="records")
+        "predicted_trending_books":
+        predictions[['title','demand_score']].to_dict(orient="records")
     }
